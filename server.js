@@ -23,13 +23,7 @@ async function main () {
 }
 const userSchema = new mongoose.Schema({
   username:{ type: String, required: true, unique: false },
-  exercises: [
-    {
-      description: { type: String },
-      duration: { type: Number },
-      date: { type: String, required: false }
-    }
-  ]
+  exercises: []
 });
 /*const exerciseSchema = new mongoose.Schema({
   username:String,
@@ -86,45 +80,83 @@ app.post('/api/users/:id/exercises', async (req,res)=>{
   }
 
   const userId = req.params.id || req.body._id;
- 
-
-  try {
-      User.findByIdAndUpdate(userId,
-        {$push: { exercices: activity } }, 
-        {new: true},
-        (err,updatedUser)=>{
-        if (err) res.json({error:"error updating user"+"\n"+err});
-        else {
-          let returnObj = {
-            _id: updatedUser.id,
-            username: updatedUser.username,
-            description: activity.description,
-            duration: activity.duration,
-            date: activity.date
-          };
-          res.json(returnObj);
-        } 
-      });
-  }catch (err) {
-    console.log(err);
-    res.json({error:err});
+  let exercisedUser;
+  try{
+    exercisedUser= await User.findById(userId);
+  }catch(err){console.log(err)}
+  console.log("adding activity to"+exercisedUser._id+"\n"+activity.description+" "+activity.date);
+  exercisedUser.exercises.push(activity);
+  try{
+    await exercisedUser.save();
+  }catch(err){console.log(err)}
+  let returnObj ={
+    _id: exercisedUser.id,
+    username: exercisedUser.username,
+    description: activity.description,
+    duration: activity.duration,
+    date: activity.date
   }
+  res.json(returnObj);
 });
 
 //GET user log
-app.get('/api/users/:id/logs', async (req,res)=>{
+app.get('/api/users/:id/logs/', async (req,res)=>{
   const userId = req.params.id || req.body._id;
+  console.log(userId);
+
   let userToLog;
   try{
-    await User.findById(userId, (err,user)=>{
-      if (err) {
-        console.log("unable to find log user");
-        res.json({error:"unable to find log user"});
-      } else userToLog=user;
-    })
+    userToLog = await User.findById(userId);
   }catch (err){console.log(err)};
 
   console.log(userToLog);
+
+  let log = [...userToLog.exercises];
+  let from;
+  let to;
+  let limit;
+  /*if (req.query.from) {
+    console.log("query present");
+    from = new Date(req.query.from.replace(/-/g, ", "));
+    to = new Date(req.query.to.replace(/-/g, ", "));
+    limit = req.query.limit;
+    log=log.filter(elem => {
+      if ( (new Date(elem.date)>=from) && (new Date(elem.date)<=to)) return true; 
+    });
+    
+    
+
+  };
+  if (req.query.limit) log=log.slice(0,limit);*/
+  
+  
+
+  let returnObj ={
+    _id:userToLog.id,
+    username: userToLog.username,
+    count:userToLog.exercises.length,
+    log: log
+  }
+  if(req.query.from) {
+    from = new Date(req.query.from.replace(/-/g, ", "));
+    returnObj.from=from.toDateString();
+    returnObj.log=returnObj.log.filter(elem => (new Date(elem.date)>=from));
+    
+  }
+
+  if(req.query.to) {
+    to = new Date(req.query.to.replace(/-/g, ", "));
+    returnObj.to=to.toDateString();
+    returnObj.log=returnObj.log.filter(elem=> (to>= new Date(elem.date)));
+  }
+  if(req.query.limit) {
+    returnObj.limit=req.query.limit;
+    returnObj.log=returnObj.log.slice(0,req.query.limit);
+  }
+
+  
+  console.log(returnObj);
+  res.json(returnObj);
 });  
 
 
